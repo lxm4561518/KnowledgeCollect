@@ -117,7 +117,7 @@ def collect(url: str) -> dict:
             
         if uc_failed:
             print("Attempting browser fallback for Zhihu (method: playwright)...")
-            cookie_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "cookies", "zhihu.json"))
+            cookie_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "cookies", "zhihu.json"))
             html_pw = get_page_content(url, method="playwright", interactive=True, hold=True, save_cookies_path=cookie_path)
             if html_pw:
                 html = html_pw

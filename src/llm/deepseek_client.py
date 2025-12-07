@@ -19,3 +19,17 @@ def summarize_markdown(text: str) -> str:
     r.raise_for_status()
     res = r.json()
     return res["choices"][0]["message"]["content"].strip()
+
+
+def chat_completion(prompt: str) -> str:
+    url = "https://api.deepseek.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+    data = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+    }
+    r = requests.post(url, headers=headers, json=data, timeout=60)
+    r.raise_for_status()
+    res = r.json()
+    return res["choices"][0]["message"]["content"].strip()

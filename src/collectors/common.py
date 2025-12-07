@@ -7,6 +7,7 @@ import browser_cookie3
 from .browser_fallback import get_page_content, get_cookies
 import shutil
 import tempfile
+import json
 import os
 
 
@@ -74,7 +75,8 @@ def fetch_html(url: str) -> str:
         headers["Cookie"] = BILIBILI_COOKIE
     session = requests.Session()
     # Prefer full CookieJar to header string for robust handling
-    zhihu_json_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "cookies", "zhihu.json"))
+    # Navigate up two levels from src/collectors to root, then to data
+    zhihu_json_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "cookies", "zhihu.json"))
     try:
         parsed = url.split("/")[2]
         base_domain = "." + ".".join(parsed.split(".")[-2:])

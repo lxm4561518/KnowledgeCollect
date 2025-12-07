@@ -20,3 +20,18 @@ def summarize_markdown(text: str) -> str:
     res = r.json()
     output = res.get("output", {})
     return output.get("text", "").strip()
+
+
+def chat_completion(prompt: str) -> str:
+    url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+    headers = {"Content-Type": "application/json", "X-DashScope-API-Key": ALI_DASHSCOPE_API_KEY}
+    data = {
+        "model": "qwen-turbo",
+        "input": {"prompt": prompt},
+        "parameters": {"result_format": "text", "temperature": 0.3},
+    }
+    r = requests.post(url, headers=headers, json=data, timeout=60)
+    r.raise_for_status()
+    res = r.json()
+    output = res.get("output", {})
+    return output.get("text", "").strip()

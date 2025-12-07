@@ -118,26 +118,50 @@ def run_playwright_task(url: str, output_path: str, action: str = "content", int
 
                     content = page.content()
                     if interactive:
-                        max_wait = 600
+                        max_wait = 3600 if hold else 600
                         start = time.time()
                         ok = False
+                        print(f"Waiting for interaction... (Hold: {hold}, Max wait: {max_wait}s)", file=sys.stderr)
                         while time.time() - start < max_wait:
-                            t = page.title()
-                            html = page.content()
-                            cookies = context.cookies()
-                            has_login_cookie = any((c.get("name") == "z_c0" and c.get("value")) for c in cookies)
-                            not_blocked = ("安全验证" not in t) and ("40362" not in html) and ("请求存在异常" not in html)
-                            if has_login_cookie or not_blocked:
-                                content = html
-                                ok = True
-                                break
-                            time.sleep(2)
-                        if not ok and hold:
                             try:
-                                input()
-                            except Exception:
-                                pass
-                            content = page.content()
+                                t = page.title()
+                                html = page.content()
+                                cookies = context.cookies()
+                                has_login_cookie = any((c.get("name") == "z_c0" and c.get("value")) for c in cookies)
+                                not_blocked = ("安全验证" not in t) and ("40362" not in html) and ("请求存在异常" not in html)
+                                
+                                is_login_url = "signin" in page.url or "signup" in page.url
+                                
+                                # Check for positive login indicator (Avatar or Message icon)
+                                try:
+                                    # .AppHeader-profile is the container for avatar in top right
+                                    # "消息" (Messages) is usually visible in header for logged-in users
+                                    user_indicator = page.locator(".AppHeader-profile").is_visible() or page.locator("text=消息").is_visible()
+                                except:
+                                    user_indicator = False
+
+                                should_break = False
+                                if hold:
+                                    # In hold mode, strictly wait for login cookie AND positive login indicator
+                                    if has_login_cookie and user_indicator:
+                                        print(f"Login verified! (Cookie: Yes, Indicator: Yes, Title: {t})", file=sys.stderr)
+                                        print("Closing browser in 5 seconds...", file=sys.stderr)
+                                        time.sleep(5)
+                                        should_break = True
+                                else:
+                                    # Normal mode: proceed if logged in (and confirmed) OR not blocked
+                                    if (has_login_cookie and user_indicator) or not_blocked:
+                                        should_break = True
+                                
+                                if should_break:
+                                    content = html
+                                    ok = True
+                                    break
+                                time.sleep(2)
+                            except Exception as e:
+                                print(f"Browser interaction ended or error: {e}", file=sys.stderr)
+                                break
+
                     with open(output_path, "w", encoding="utf-8") as f:
                         f.write(content)
                     if save_cookies_path:
