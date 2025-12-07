@@ -4,3 +4,5 @@ __pycache__/
 *.log
 *.tmp
 *.cache
+.profiles/
+data/cookies/
