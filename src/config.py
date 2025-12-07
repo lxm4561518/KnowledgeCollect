@@ -1,7 +1,12 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Try loading .env first, then .env.ini
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+if not os.path.exists(env_path):
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env.ini")
+
+load_dotenv(env_path)
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 ALI_DASHSCOPE_API_KEY = os.getenv("ALI_DASHSCOPE_API_KEY", "")

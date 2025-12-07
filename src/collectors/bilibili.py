@@ -85,7 +85,7 @@ def collect(url: str) -> dict:
         "noplaylist": True,
         "http_headers": {
             "Referer": "https://www.bilibili.com",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         },
         "retries": 10,
         "fragment_retries": 10,
@@ -158,40 +158,126 @@ def collect(url: str) -> dict:
                 bvid = match.group(0)
             
             if bvid:
-                async def get_audio_url_via_api():
-                    # SESSDATA is needed for high quality, but for audio maybe not strictly required for basic
-                    # But 412 is IP block or anti-crawl.
-                    # We can try without creds first, or use cookies if we have them.
-                    # For now, try no creds (or minimal)
-                    v = video.Video(bvid=bvid)
+                # Use asyncio.run() which handles loop setup/teardown and defaults to ProactorEventLoop on Windows
+                async def get_data_via_api():
+                    # Try to load credentials from browser cookies
+                    from bilibili_api import Credential
+                    cred = None
+                    try:
+                        # Try to load from data/cookies/bilibili.json first
+                        cookie_json_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "cookies", "bilibili.json"))
+                        if os.path.exists(cookie_json_path):
+                            print(f"Loading cookies from {cookie_json_path}")
+                            import json
+                            with open(cookie_json_path, "r", encoding="utf-8") as f:
+                                cookies_list = json.load(f)
+                            
+                            sessdata = None
+                            bili_jct = None
+                            buvid3 = None
+                            dedeuserid = None
+                            
+                            for c in cookies_list:
+                                if c.get("name") == "SESSDATA":
+                                    sessdata = c.get("value")
+                                elif c.get("name") == "bili_jct":
+                                    bili_jct = c.get("value")
+                                elif c.get("name") == "buvid3":
+                                    buvid3 = c.get("value")
+                                elif c.get("name") == "DedeUserID":
+                                    dedeuserid = c.get("value")
+                                    
+                            if sessdata and bili_jct:
+                                print(f"Loaded Bilibili credentials from JSON (SESSDATA found, UserID: {dedeuserid})")
+                                cred = Credential(sessdata=sessdata, bili_jct=bili_jct, buvid3=buvid3, dedeuserid=dedeuserid)
+                        
+                        if not cred:
+                            # Try to load from browser_cookie3
+                            cj = load_cookies_safely(".bilibili.com")
+                            sessdata = None
+                            bili_jct = None
+                            buvid3 = None
+                            dedeuserid = None
+                            for c in cj:
+                                if c.name == "SESSDATA":
+                                    sessdata = c.value
+                                elif c.name == "bili_jct":
+                                    bili_jct = c.value
+                                elif c.name == "buvid3":
+                                    buvid3 = c.value
+                                elif c.name == "DedeUserID":
+                                    dedeuserid = c.value
+                            
+                            if sessdata and bili_jct:
+                                print(f"Loaded Bilibili credentials (SESSDATA found, UserID: {dedeuserid})")
+                                cred = Credential(sessdata=sessdata, bili_jct=bili_jct, buvid3=buvid3, dedeuserid=dedeuserid)
+                            else:
+                                print("Bilibili cookies found but missing SESSDATA/bili_jct.")
+                    except Exception as e:
+                        print(f"Failed to load Bilibili cookies for API: {e}")
+
+                    v = video.Video(bvid=bvid, credential=cred)
                     # We need to get download url
                     # detect cid first
-                    info_api = await v.get_info()
+                    try:
+                        info_api = await v.get_info()
+                        # Debug subtitles
+                        # import json
+                        # print(f"Subtitle info: {json.dumps(info_api.get('subtitle'), ensure_ascii=False)}")
+                    except Exception as e:
+                        print(f"bilibili-api get_info failed: {e}")
+                        return "", "", ""
+                        
                     title_api = info_api.get("title", "")
-                    # print(info_api)
                     
-                    # Get audio url
-                    # https://github.com/Passkou/bilibili-api-python/blob/main/bilibili_api/video.py
-                    url_data = await v.get_download_url(page_index=0)
-                    # url_data['dash']['audio'][0]['baseUrl']
-                    audio_url = None
-                    if "dash" in url_data:
-                        audios = url_data["dash"].get("audio", [])
-                        if audios:
-                            audio_url = audios[0].get("baseUrl") or audios[0].get("backupUrl", [None])[0]
-                    elif "durl" in url_data:
-                         # flv/mp4
-                         audio_url = url_data["durl"][0]["url"]
-                         
-                    return title_api, audio_url
+                    # Try to get subtitles directly from API
+                    subtitle_text = ""
+                    if "subtitle" in info_api and "list" in info_api["subtitle"]:
+                        subs = info_api["subtitle"]["list"]
+                        if subs:
+                            # Prefer zh-CN
+                            target_sub = next((s for s in subs if s.get("lan") in ["zh-CN", "zh-Hans", "zh"]), None)
+                            if not target_sub:
+                                target_sub = subs[0]
+                            
+                            sub_url = target_sub.get("subtitle_url")
+                            if sub_url:
+                                print(f"Found subtitle URL: {sub_url}")
+                                # Fetch sub_url (json format usually)
+                                import aiohttp
+                                async with aiohttp.ClientSession() as session:
+                                    async with session.get(sub_url) as resp:
+                                        if resp.status == 200:
+                                            sub_data = await resp.json()
+                                            # Parse BCC/JSON subtitles
+                                            # {'body': [{'from': 0.1, 'to': 2.5, 'content': '...'}, ...]}
+                                            if "body" in sub_data:
+                                                subtitle_text = "\n".join([item["content"] for item in sub_data["body"]])
 
-                # Use asyncio.run() which handles loop setup/teardown and defaults to ProactorEventLoop on Windows
-                title_api, audio_url = asyncio.run(get_audio_url_via_api())
+                    # Get audio url
+                    audio_url = None
+                    try:
+                        url_data = await v.get_download_url(page_index=0)
+                        if "dash" in url_data:
+                            audios = url_data["dash"].get("audio", [])
+                            if audios:
+                                audio_url = audios[0].get("baseUrl") or audios[0].get("backupUrl", [None])[0]
+                        elif "durl" in url_data:
+                            audio_url = url_data["durl"][0]["url"]
+                    except Exception as e:
+                        print(f"bilibili-api get_download_url failed: {e}")
+                         
+                    return title_api, audio_url, subtitle_text
+
+                title_api, audio_url, subtitle_text_api = asyncio.run(get_data_via_api())
                 
                 if title_api:
                     title = title_api
                 
-                if audio_url:
+                if subtitle_text_api:
+                    print("Successfully retrieved subtitles via API.")
+                    text = subtitle_text_api
+                elif audio_url:
                     print(f"Got audio URL via API: {audio_url[:50]}...")
                     # Download audio manually
                     audio_path = os.path.join(temp_dir, "audio_temp.m4a")

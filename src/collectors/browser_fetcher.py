@@ -127,19 +127,41 @@ def run_playwright_task(url: str, output_path: str, action: str = "content", int
                                 t = page.title()
                                 html = page.content()
                                 cookies = context.cookies()
-                                has_login_cookie = any((c.get("name") == "z_c0" and c.get("value")) for c in cookies)
+                                
+                                # Platform specific checks
+                                is_zhihu = "zhihu.com" in page.url
+                                is_bilibili = "bilibili.com" in page.url
+                                
+                                has_login_cookie = False
+                                user_indicator = False
+                                
+                                if is_zhihu:
+                                    has_login_cookie = any((c.get("name") == "z_c0" and c.get("value")) for c in cookies)
+                                    try:
+                                        user_indicator = page.locator(".AppHeader-profile").is_visible() or page.locator("text=消息").is_visible()
+                                    except:
+                                        user_indicator = False
+                                elif is_bilibili:
+                                    has_login_cookie = any((c.get("name") == "SESSDATA" and c.get("value")) for c in cookies)
+                                    try:
+                                        # Bilibili header avatar class often changes, but usually has 'avatar' in class name or specific id
+                                        # .header-entry-avatar is common in new header
+                                        # Also check for "大会员" or "消息" text
+                                        user_indicator = page.locator(".header-entry-avatar").is_visible() or \
+                                                         page.locator(".header-avatar-wrap").is_visible() or \
+                                                         page.locator("text=大会员").is_visible() or \
+                                                         page.locator("text=消息").is_visible()
+                                    except:
+                                        user_indicator = False
+                                else:
+                                    # Default fallback for other sites
+                                    has_login_cookie = True
+                                    user_indicator = True
+
                                 not_blocked = ("安全验证" not in t) and ("40362" not in html) and ("请求存在异常" not in html)
                                 
-                                is_login_url = "signin" in page.url or "signup" in page.url
+                                is_login_url = "signin" in page.url or "signup" in page.url or "passport" in page.url
                                 
-                                # Check for positive login indicator (Avatar or Message icon)
-                                try:
-                                    # .AppHeader-profile is the container for avatar in top right
-                                    # "消息" (Messages) is usually visible in header for logged-in users
-                                    user_indicator = page.locator(".AppHeader-profile").is_visible() or page.locator("text=消息").is_visible()
-                                except:
-                                    user_indicator = False
-
                                 should_break = False
                                 if hold:
                                     # In hold mode, strictly wait for login cookie AND positive login indicator

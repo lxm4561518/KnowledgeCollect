@@ -44,8 +44,32 @@ def ensure_zhihu_login_if_needed() -> None:
         except Exception:
             need_login = True
     if need_login:
+        print("Zhihu login required. Opening browser...")
         get_page_content(
             "https://www.zhihu.com/",
+            method="playwright",
+            interactive=True,
+            hold=True,
+            save_cookies_path=cookie_path,
+        )
+
+def ensure_bilibili_login_if_needed() -> None:
+    cookie_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "cookies", "bilibili.json"))
+    need_login = True
+    if os.path.exists(cookie_path):
+        try:
+            with open(cookie_path, "r", encoding="utf-8") as f:
+                arr = json.load(f)
+            for c in arr:
+                if c.get("name") == "SESSDATA" and c.get("value"):
+                    need_login = False
+                    break
+        except Exception:
+            need_login = True
+    if need_login:
+        print("Bilibili login required. Opening browser...")
+        get_page_content(
+            "https://www.bilibili.com/",
             method="playwright",
             interactive=True,
             hold=True,
@@ -100,6 +124,8 @@ def run(input_csv: str) -> None:
             platform = detect_platform(url)
             if platform == "zhihu":
                 ensure_zhihu_login_if_needed()
+            elif platform == "bilibili":
+                ensure_bilibili_login_if_needed()
             # platform_folder = ensure_folder(source or platform, root_token)
             # print(f"处理[{platform}] {url} -> 子文件夹: {platform_folder}")
             print(f"Processing [{platform}] {url}")
