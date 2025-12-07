@@ -1,0 +1,394 @@
+{
+  "name": "个人知识库采集",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        0
+      ],
+      "id": "598cb8d2-ce0f-4fec-85b7-2fdaf358076a",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "resource": "bitable",
+        "operation": "bitable:table:record:search",
+        "app_toke": "YdHKbWFalaCg0Us3QOMcYuxPnXc",
+        "table_id": "tblE7lg4WYsbqKO9",
+        "page_size": 1000,
+        "body": "{\n\"field_names\": [\n\t\t\"URL\"\n\t],\n   \"filter\": {\n    \"conjunction\": \"and\",\n    \"conditions\": [\n      {\n        \"field_name\": \"URL\",\n        \"operator\": \"isNotEmpty\",\n        \"value\": []\n      }\n    ]\n  }\n}"
+      },
+      "type": "n8n-nodes-feishu-lite.feishuNode",
+      "typeVersion": 1,
+      "position": [
+        -304,
+        0
+      ],
+      "id": "0adb13e1-32ca-40cb-af01-135c1e278faa",
+      "name": "Bitable:table:record:search bitable",
+      "credentials": {
+        "feishuCredentialsApi": {
+          "id": "45YNbjGAbVjJaBdp",
+          "name": "Feishu Credentials account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/transcript",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "bilibili_url",
+              "value": "={{ $json.link }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        432,
+        0
+      ],
+      "id": "4a6c574f-9605-47c9-ac63-f41e9ff3e97d",
+      "name": "HTTP Request",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=你是一个资深的软件架构师和技术布道者。请对以下技术文章内容进行总结，要求如下：\n\n1. **尊重原文**：准确提炼核心论点和技术要点，不歪曲原意\n2. **通俗化解释**：对复杂的技术概念，使用生活化的比喻帮助理解\n   - 比如将\"异步编程\"比作\"餐厅点餐后拿到号码牌，不必干等着\"\n   - 将\"数据库索引\"比作\"书本的目录\"\n3. **代码示例**：对关键的技术点提供简短的代码示例加深理解\n\n请按照以下结构组织总结内容：\n\n## 核心观点\n- 用1-2句话概括文章主旨\n\n## 关键技术解析\n- 分点列出重要的技术概念\n- 每个概念配通俗比喻和简短代码示例\n\n## 实践价值\n- 这些技术在实际开发中如何应用\n\n## 延伸思考\n- 还可以探索哪些相关技术\n\n需要总结的技术内容：\n{{ $json.content }}\n\n**输出格式**：\n请生成严格的JSON格式，summary字段使用markdown语法：\n\n{\n  \"title\": \"{{ $json.title }}\",\n  \"summary\": \"请将完整的技术总结以markdown格式放在这里，包含所有要求的章节和代码块\"\n}\n",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        656,
+        0
+      ],
+      "id": "0531b75e-7cc1-4ee2-90a2-07dde52a92de",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "deepseek-reasoner",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        400,
+        208
+      ],
+      "id": "46a2dd68-299d-4ea0-a3f3-e4c31b881c9e",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "e9xbo5micVHzE6v1",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 处理大模型返回的嵌套JSON字符串\nconst inputData = $input.all();\n\ntry {\n  // 处理所有输入项（虽然通常只有一项）\n  const processedItems = inputData.map(item => {\n    const rawOutput = item.json.output;\n    \n    if (!rawOutput) {\n      throw new Error(\"未找到output字段\");\n    }\n    \n    // 1. 解析外层的JSON字符串\n    let parsedOutput;\n    try {\n      parsedOutput = JSON.parse(rawOutput);\n    } catch (parseError) {\n      // 如果直接解析失败，尝试清理可能的Markdown代码块标记\n      const cleanedOutput = rawOutput\n        .replace(/```json\\s*/g, '')\n        .replace(/\\s*```/g, '')\n        .trim();\n      \n      parsedOutput = JSON.parse(cleanedOutput);\n    }\n    \n    // 2. 提取title和summary\n    const title = parsedOutput.title || \"无标题\";\n    const summary = parsedOutput.summary || \"无内容\";\n    \n    // 3. 清理summary中的转义字符（如\\\\n）\n    const cleanedSummary = summary.replace(/\\\\n/g, '\\n');\n    \n    // 4. 返回格式化后的数据\n    return {\n      json: {\n        title: title,\n        summary: cleanedSummary,\n        summary_length: cleanedSummary.length,\n        processed_at: new Date().toISOString(),\n        // 保留原始数据用于调试（可选）\n        _raw_preview: rawOutput.substring(0, 200) + \"...\"\n      }\n    };\n  });\n  \n  return processedItems;\n  \n} catch (error) {\n  // 错误处理\n  return [{\n    json: {\n      error: error.message,\n      raw_data: inputData.length > 0 ? JSON.stringify(inputData[0].json).substring(0, 500) : \"无数据\",\n      timestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        256
+      ],
+      "id": "f9756afd-fddf-455a-8362-0d1c62057015",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "resource": "doc",
+        "operation": "doc:create",
+        "title": "={{ $json.title }}",
+        "folder_toke": "TlKafxavtlmNjpdHYdecUzOPnSg"
+      },
+      "type": "n8n-nodes-feishu-lite.feishuNode",
+      "typeVersion": 1,
+      "position": [
+        224,
+        256
+      ],
+      "id": "cc7a2019-cf6d-4d17-ab7a-4b5c8466324b",
+      "name": "Doc:create doc",
+      "credentials": {
+        "feishuCredentialsApi": {
+          "id": "45YNbjGAbVjJaBdp",
+          "name": "Feishu Credentials account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n    \"app_id\": \"cli_a9a4526022b85bd9\",\n    \"app_secret\": \"McaaBSA1CihWPaQzad911gTd6h5UhzUB\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        640,
+        256
+      ],
+      "id": "d5d56c89-c9fb-46e7-82b4-9d1cb92aa372",
+      "name": "获取应用token"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.feishu.cn/open-apis/docx/v1/documents/blocks/convert",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=bearer {{ $json.tenant_access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"content_type\": \"markdown\",\n    \"content\": \"{{ $('Code in JavaScript').item.json.summary.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n') }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        992,
+        256
+      ],
+      "id": "6f41e6cc-09da-4c34-8993-d709cc436104",
+      "name": "转换成富文本"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://open.feishu.cn/open-apis/docx/v1/documents/{{ $('Doc:create doc').item.json.data.document.document_id }}/blocks/{{ $('Doc:create doc').item.json.data.document.document_id }}/descendant",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=bearer {{ $('获取应用token').item.json.tenant_access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"index\": 0,\n    \"children_id\":[{{ $json.data.first_level_block_ids.map(id => `\"${id}\"`) }}],\n    \"descendants\": {{ JSON.stringify($json.data.blocks) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1200,
+        256
+      ],
+      "id": "f59ca86f-e89e-46a7-8b3c-c23cce3e8ee9",
+      "name": "把富文本写入飞书文档"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        112,
+        0
+      ],
+      "id": "8c9e2ce8-31c7-435d-9fc0-e40b7147a104",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 从上游节点获取所有输入项\nconst inputItems = $input.first().json.data.items;\n\n// 处理每个输入项，提取 link 字段\nconst outputItems = inputItems.map(item => {\n    // 关键修正：直接访问 item.fields.URL.link，去掉多余的 .json\n    const videoLink = item?.fields?.URL?.link;\n    \n    // 返回 n8n 标准格式的数据项\n    return {\n        json: {\n            link: videoLink || \"\" \n        }\n    };\n});\n\n// 返回处理后的结果数组\nreturn outputItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        0
+      ],
+      "id": "bd170708-7219-4e55-a90d-b51ff05d4472",
+      "name": "Code in JavaScript1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Bitable:table:record:search bitable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bitable:table:record:search bitable": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Doc:create doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Doc:create doc": {
+      "main": [
+        [
+          {
+            "node": "获取应用token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "获取应用token": {
+      "main": [
+        [
+          {
+            "node": "转换成富文本",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "转换成富文本": {
+      "main": [
+        [
+          {
+            "node": "把富文本写入飞书文档",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "把富文本写入飞书文档": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "26024981-8033-433a-9a11-acb6d89c1aa0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ab76a56521b7cb91b74975779cf50fe4e09e510c24b039abb58d40be65c396c7"
+  },
+  "id": "R8Xk6OQMQmYyw5ri",
+  "tags": []
+}

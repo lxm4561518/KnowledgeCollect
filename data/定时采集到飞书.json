@@ -1,0 +1,188 @@
+{
+  "name": "定时采集到飞书1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8e147d88-ccb3-4489-8478-3b819e50717e",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://apis.tianapi.com/dgryl/index",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "c0a30165df262d32f54e37640b9c5245"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "3e381234-be6d-40ec-8bc5-9e230a08e525",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=分析以下这段{{ $json.result.content }}，返回500字文章",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "f248ab0a-c84b-41ac-bb47-a7d6b6bbd832",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        288,
+        208
+      ],
+      "id": "be76615e-5878-4805-93bf-5c939ffd21c1",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "e9xbo5micVHzE6v1",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and process each string to remove unwanted characters\nfor item in _input.all():\n    # Get the original string\n    original_str = item.json.output  # 假设字符串存储在myStringField字段中\n    \n    # Define characters to remove\n    chars_to_remove = ['\\n\\n', '#', '*', '\\\"', '\\n']\n    \n    # Remove each specified character\n    for char in chars_to_remove:\n        original_str = original_str.replace(char, '')\n    \n    # Update the field with cleaned string\n    item.json.cleanedString = original_str\n\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        0
+      ],
+      "id": "077f983e-476d-4ffc-bb8f-5186739c9372",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "resource": "bitable",
+        "operation": "bitable:table:record:add",
+        "app_toke": "VZJjbraH1acpETsuIWecTXFjndl",
+        "table_id": "tblgB8DNX4DlMVg9",
+        "body": "={\"fields\":{\"原文\":\"{{ $('HTTP Request').item.json.result.content }}\",\"大模型改写后\":\"{{ $json.cleanedString }}\"}}"
+      },
+      "type": "n8n-nodes-feishu-lite.feishuNode",
+      "typeVersion": 1,
+      "position": [
+        976,
+        0
+      ],
+      "id": "99ddb0ba-7c19-426a-8be7-5dd26efd51f1",
+      "name": "Bitable:table:record:add bitable",
+      "credentials": {
+        "feishuCredentialsApi": {
+          "id": "45YNbjGAbVjJaBdp",
+          "name": "Feishu Credentials account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Bitable:table:record:add bitable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e5956f87-6e3a-4f32-836d-390232bc4db8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ab76a56521b7cb91b74975779cf50fe4e09e510c24b039abb58d40be65c396c7"
+  },
+  "id": "OhQ5ssTjmHYTgTIc",
+  "tags": []
+}
